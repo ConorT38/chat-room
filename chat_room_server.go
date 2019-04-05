@@ -6,7 +6,6 @@ import (
     "os"
     "time"
     "regexp"
-    "strings"
     )
 
 const (
@@ -15,11 +14,24 @@ const (
     CONN_TYPE = "tcp"
     ERROR = "Error"
     INFO = "Info"
-    SUCCESS = "success"
+    CREATE_SUCCESS = "successfully created room"
+    JOIN_SUCCESS = "successfully joined room"
 )
 
 var connections []net.Conn
 var rooms = make(map[string][]net.Conn)
+
+type Message struct{
+  from User
+  room string
+  time string
+}
+
+type User struct{
+  name string
+  room string
+  conn net.Conn
+}
 
 func main() {
     // Listen for incoming connections.
@@ -40,6 +52,7 @@ func main() {
 
         if err != nil {
             log(err.Error(),ERROR)
+            handleDisconnection()
             os.Exit(1)
         }
 
@@ -51,20 +64,12 @@ func main() {
 
 // Handles incoming requests.
 func broadcast(message string, conn net.Conn) {
-  
-  r, _ := regexp.Compile("^(.*?)]")
-  match := r.FindString(message)
-  match = match[1:]
-  match = match[:len(match)-1]
-
-  for k, v := range rooms { 
-    fmt.Printf("key[%s] value[%s]\n", k, v)
-}
-  for _, connection := range rooms[match]{
+  room := getFromBrackets(message)
+  for _, connection := range rooms[room]{
     if conn != connection {
-    connection.Write([]byte(message))
+    sendMessage(connection,message)
+    }
   }
-}
 }
 
 func handleRequest(conn net.Conn){
@@ -82,27 +87,22 @@ func handleRequest(conn net.Conn){
 
   log(message,INFO)
   if message[:11] == "[JOIN_ROOM]"{ 
-    //TODO: grab only characters and not whitespace from room
-    r, _ := regexp.Compile("(\\S)*")
-    match := r.FindString(message)
-    log("["+match+"]",INFO)
-    if joinRoom(conn,message[11:]){
-     sendMessage(conn,SUCCESS)
-    }else if createRoom(conn,message[11:]) && joinRoom(conn,message[11:]){
-      sendMessage(conn,SUCCESS)
+    room := getFromBrackets(message[11:]) 
+    if joinRoom(conn,room){
+     sendMessage(conn,JOIN_SUCCESS)
+    }else if createRoom(conn,room){
+      sendMessage(conn,CREATE_SUCCESS)
     }
   } else{
     go broadcast(message,conn)
 }
-  // Close the connection when you're done with it.
   }
   conn.Close()
 }
 
 func createRoom(conn net.Conn, room string) bool{
-  fmt.Printf("["+room+"]")
   if _, ok := rooms[room]; ok {
-      sendMessage(conn,"failed")
+      sendMessage(conn,"[SERVER]: Room exists")
       return false
   } else{
     log("room created:"+ room,INFO)
@@ -112,13 +112,12 @@ func createRoom(conn net.Conn, room string) bool{
 }
 
 func joinRoom(conn net.Conn, room string) bool{
-  room = strings.TrimSpace(room[:len(room)-1])
   if _, ok := rooms[room]; ok {
     rooms[room] = append(rooms[room],conn)
-    log("Joined room "+room,INFO)
+    go broadcast("[SERVER]: New connection",conn)
     return true
   } else{
-    sendMessage(conn, "failed")
+    sendMessage(conn, "[SERVER]: Couldn't join room")
     return false
   }
 }
@@ -138,4 +137,16 @@ func log(message string, type_ string){
       }else{
         fmt.Println(ERROR+log_time+": "+message)
       }
+}
+
+func getFromBrackets(str string) string{
+  log(str,INFO)
+  r, _ := regexp.Compile("^(.*?)]")
+  match := r.FindString(str)
+  match = match[1:]
+  return match[:len(match)-1]
+}
+
+func handleDisconnection(){
+  log("User disconnected",INFO)
 }

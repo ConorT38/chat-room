@@ -6,6 +6,8 @@ import(
  "bufio"
  "os"
  "time"
+ "os/signal"
+  "syscall"
  
  )
 
@@ -18,108 +20,108 @@ const (
   CONN_PORT = "80"
 )
 
-var name string 
-var room string
+type Message struct{
+  from User
+  room string
+  time string
+}
+
+type User struct{
+  name string
+  room string
+  conn net.Conn
+}
 
 func main() {
 
   // connect to this socket
   conn, _ := net.Dial(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
-  login(conn)
-  room = "["+room+"]"
-  
+  user := login(conn)
+
   for { 
+    handleQuit(user)
     // read in input from stdin
+    inputLabel(user)
     reader := bufio.NewReader(os.Stdin)
     text, _ := reader.ReadString('\n')
     time_sent := "["+time.Now().Format(TIME_FORMAT)+"]"
     
     // send to socket
     if text != "" {
-    sendMessage(conn, room+time_sent+name+text + "\n")
+    sendMessage(user, user.room+time_sent+user.name+text + "\n")
   }
     
   }
 }
 
-func listen(conn net.Conn){
+func listen(user User){
   for{
-    message, _ := bufio.NewReader(conn).ReadString('\n')
+    message, _ := bufio.NewReader(user.conn).ReadString('\n')
     fmt.Println("\n"+string(message))
+    inputLabel(user)
   }
 }
 
-func login(conn net.Conn){
-  fmt.Print(ENTER_ALIAS) 
-  fmt.Scanln(&name)
-  name = "["+name+"]: "
+func login(conn net.Conn) User{
+  var name string 
+  var room string
 
-  fmt.Print("Create or Join a room: ")
-  fmt.Scanln(&room)
-  joinRoom(conn,room)
+  InputLoop:
+    for name == "" || room == ""{ 
+      fmt.Print(ENTER_ALIAS) 
+      fmt.Scanln(&name)
+      if name == ""{
+        log("Name can't be blank")
+        continue InputLoop
+      }
+      name = "["+name+"]: "
+
+      fmt.Print("Create or Join a room: ")
+      fmt.Scanln(&room)
+      if room == "" {
+        log("room can't be blank")
+        continue InputLoop
+      }
+      room = "["+room+"]"
+  }
+
+  user := User{name: name, room: room, conn: conn} 
+  joinRoom(user)
   
-  go listen(conn) 
+  go listen(user) 
 
   fmt.Print(ENTER_MESSAGE)
+
+  return user
 }
 
-func sendMessage(conn net.Conn, message string){
-  fmt.Fprintf(conn, message)
+//TODO: add user object instead of conn
+func sendMessage(user User, message string){
+  fmt.Fprintf(user.conn, message)
 }
 
-func joinRoom(conn net.Conn, room string) {
-  request := "[JOIN_ROOM]" + room
-  sendMessage(conn,request)
+func joinRoom(user User) {
+  request := "[JOIN_ROOM]"+user.room
+  sendMessage(user,request)
 }
-// func joinRoom(conn net.Conn, room string) bool{
-//   request := "[JOIN_ROOM]" + room
-//   var message string 
-
-//   sendMessage(conn,request)
-//   go func(conn net.Conn) {
-//     for{
-//       message, _ = bufio.NewReader(conn).ReadString('\n')
-//       log(message)
-//       if message == "success" {
-//         log("You have succesfully joined room: "+room)
-//         break
-//       }
-//     }
-//     }(conn)
-
-//     if message == "success" {
-//       return true
-//     }
-//     log("dang")
-//     return false
-// }
-
-// func createRoom(conn net.Conn, room string) bool{
-//   request := "[CREATE_ROOM]" + room 
-//   //sendMessage(conn,request)
-//   var status string
-//   fmt.Fprintf(conn, request)
-//   //go func(conn net.Conn) {
-//     for{
-//       message, _, err := bufio.NewReader(conn).ReadString('\n')
-//       if err !=nil{
-//         log(err.Error())
-//       }
-//       if message == "success" {
-//         log("You have succesfully joined room: "+room)
-//         status = message
-//         break
-//       }
-//     }
-//     //}(conn)
-
-//     if status == "success" {
-//       return true
-//     }
-//     log("dang")
-//     return false
-// }
 
 func log(message string){
   fmt.Println(message+"\n")
+}
+
+func handleQuit(user User){
+   c := make(chan os.Signal)
+    signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+    go func() {
+        <-c
+        sendMessage(user,"[SERVER]: "+user.name[:len(user.name)-2]+" disconnected")
+        log("You disconnected from "+user.room)
+        os.Exit(1)
+    }()
+}
+
+func inputLabel(user User){
+  f := bufio.NewWriter(os.Stdout)
+  defer f.Flush()
+  f.Write([]byte(user.room+user.name))
 }
