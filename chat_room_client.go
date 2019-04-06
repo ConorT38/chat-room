@@ -15,8 +15,8 @@ const (
   ENTER_ALIAS   = "Enter alias here: "
   ENTER_MESSAGE = "Enter in a message below:\n"
   CONN_TYPE     = "tcp"
-  CONN_HOST     = "https://247855f1.ngrok.io"
-  CONN_PORT     = "80"
+  CONN_HOST     = "0.tcp.ngrok.io"
+  CONN_PORT     = "11417"
 )
 
 type Message struct {
@@ -38,8 +38,9 @@ func main() {
 
   for {
     handleQuit(user)
-    inputLabel(user)
+    //inputLabel(user)
     
+    fmt.Print(user.room+user.name)
     reader := bufio.NewReader(os.Stdin)
     text, _ := reader.ReadString('\n')
     time_sent := "[" + time.Now().Format(TIME_FORMAT) + "]"
