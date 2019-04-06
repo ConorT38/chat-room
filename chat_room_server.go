@@ -30,9 +30,9 @@ type User struct {
   conn net.Conn
 }
 
+var connections []net.Conn
+var rooms = make(map[string][]net.Conn)
 func main() {
-  var connections []net.Conn
-  var rooms = make(map[string][]net.Conn)
   l, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
 
   if err != nil {

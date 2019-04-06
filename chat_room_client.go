@@ -15,7 +15,7 @@ const (
   ENTER_ALIAS   = "Enter alias here: "
   ENTER_MESSAGE = "Enter in a message below:\n"
   CONN_TYPE     = "tcp"
-  CONN_HOST     = "localhost"
+  CONN_HOST     = "https://247855f1.ngrok.io"
   CONN_PORT     = "80"
 )
 
